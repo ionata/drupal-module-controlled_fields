@@ -6,9 +6,10 @@
  */
 
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Field\FieldConfigInterface;
-use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Form\FormState;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Routing\RouteMatchInterface;
 
@@ -303,6 +304,98 @@ function controlled_fields_add_required_class(&$form_field) {
 }
 
 /**
+ * Implements hook_inline_entity_form_entity_form_alter().
+ */
+function controlled_fields_inline_entity_form_entity_form_alter(&$entity_form, &$form_state) {
+  controlled_fields_entity_form_alter($entity_form, $form_state);
+}
+
+/**
+ * Alter an entity form.
+ */
+function controlled_fields_entity_form_alter(&$form, &$form_state, $bundle = NULL) {
+  $storage = $form_state->getStorage();
+  $form_display = $storage['form_display'];
+  $form_mode = $form_display->getMode();
+  $enabled_forms = \Drupal::configFactory()->get('controlled_fields.forms')->get('forms');
+
+  if (isset($form['#entity'])) {
+    $entity = $form['#entity'];
+    $entity_type = $entity->getEntityTypeId();
+    $bundle = $entity->bundle();
+    $form_display = EntityFormDisplay::collectRenderDisplay($entity, $form_mode);
+  }
+  else {
+    $entity_type = $form_display->getTargetEntityTypeId();
+    $bundle = $form_display->getTargetBundle();
+  }
+
+  foreach ($enabled_forms as $config_id => $display_modes) {
+    // Check form id.
+    if (controlled_fields_config_form_id($config_id) != ($entity_type . '.' . $bundle)) {
+      continue;
+    }
+
+    // Check form mode.
+    if (!array_key_exists($form_mode, $display_modes)) {
+      continue;
+    }
+
+    $has_required = FALSE;
+
+    $field_definitions = controlled_fields_fetch_field_definitions($form_display->getTargetEntityTypeId(), $form_display->getTargetBundle());
+    foreach ($field_definitions as $field_name => $field_definition) {
+      $widget = $form_display->getRenderer($field_name);
+      if ($widget === NULL) {
+        continue;
+      }
+
+      $plugin_parent_conditional = $widget->getThirdPartySetting('controlled_fields', 'parent_conditional', NULL);
+      $plugin_parent_conditional_value = $widget->getThirdPartySetting('controlled_fields', 'parent_conditional_value');
+
+      if (!empty($plugin_parent_conditional)) {
+        // Add in conditional classes.
+        $form[$plugin_parent_conditional]['#attributes']['class'][] = 'controlled-master controlled-master-' . str_replace('_', '-', $plugin_parent_conditional);
+        $form[$field_name]['#attributes']['class'][] = 'controlled-dependent controlled-dependent-value-' . $plugin_parent_conditional_value . ' controlled-dependent-field-' . str_replace('_', '-', $plugin_parent_conditional);
+      }
+
+      // Required handling.
+      if ($field_definition->getThirdPartySetting('controlled_fields', 'required', 0) === 1) {
+        controlled_fields_add_required_class($form[$field_name]);
+        $has_required = TRUE;
+      }
+
+      // Check field collections for required fields.
+      // @TODO finish this or create some kind of hook / plugin solution.
+      if ($field_definition->getType() == 'field_collection') {
+        $fc_definitions = controlled_fields_fetch_field_definitions('field_collection_item', $field_name);
+
+        foreach ($fc_definitions as $fc_name => $fc_definition) {
+          if ($fc_definition->getThirdPartySetting('controlled_fields', 'required', 0) === 1) {
+            foreach (Element::children($form[$field_name]['widget']) as $widget_key) {
+              if ($widget_key !== 'add_more') {
+                $form[$field_name]['widget'][$widget_key][$fc_name]['#attributes']['class'][] = 'controlled-required';
+              }
+            }
+
+            $has_required = TRUE;
+          }
+        }
+      }
+
+      $form[$field_name]['#attributes']['class'][] = 'controlled-field';
+    }
+
+    $form['#attached']['library'][] = 'controlled_fields/controlled_fields_form';
+
+    if ($has_required) {
+      $form['actions']['submit']['#validate'][] = 'controlled_fields_form_validate';
+    }
+  }
+
+}
+
+/**
  * Implements hook_form_alter().
  */
 function controlled_fields_form_alter(&$form, FormStateInterface $form_state, $form_id) {
@@ -313,72 +406,8 @@ function controlled_fields_form_alter(&$form, FormStateInterface $form_state, $f
       return;
     }
 
-    $form_display = $storage['form_display'];
-    $form_mode = $form_display->getMode();
-    $enabled_forms = \Drupal::configFactory()->get('controlled_fields.forms')->get('forms');
-
-    foreach ($enabled_forms as $config_id => $display_modes) {
-      // Check form id.
-      if (controlled_fields_config_form_id($config_id) != ($form_display->getTargetEntityTypeId() . '.' . $form_display->getTargetBundle())) {
-        continue;
-      }
-
-      // Check form mode.
-      if (!array_key_exists($form_mode, $display_modes)) {
-        continue;
-      }
-
-      $has_required = FALSE;
-
-      $field_definitions = controlled_fields_fetch_field_definitions($form_display->getTargetEntityTypeId(), $form_display->getTargetBundle());
-      foreach ($field_definitions as $field_name => $field_definition) {
-        $widget = $form_display->getRenderer($field_name);
-        if ($widget === NULL) {
-          continue;
-        }
-
-        $plugin_parent_conditional = $widget->getThirdPartySetting('controlled_fields', 'parent_conditional', NULL);
-        $plugin_parent_conditional_value = $widget->getThirdPartySetting('controlled_fields', 'parent_conditional_value');
-
-        if (!empty($plugin_parent_conditional)) {
-          // Add in conditional classes.
-          $form[$plugin_parent_conditional]['#attributes']['class'][] = 'controlled-master controlled-master-' . str_replace('_', '-', $plugin_parent_conditional);
-          $form[$field_name]['#attributes']['class'][] = 'controlled-dependent controlled-dependent-value-' . $plugin_parent_conditional_value . ' controlled-dependent-field-' . str_replace('_', '-', $plugin_parent_conditional);
-        }
-
-        // Required handling.
-        if ($field_definition->getThirdPartySetting('controlled_fields', 'required', 0) === 1) {
-          controlled_fields_add_required_class($form[$field_name]);
-          $has_required = TRUE;
-        }
-
-        // Check field collections for required fields.
-        // @TODO finish this or create some kind of hook / plugin solution.
-        if ($field_definition->getType() == 'field_collection') {
-          $fc_definitions = controlled_fields_fetch_field_definitions('field_collection_item', $field_name);
-
-          foreach ($fc_definitions as $fc_name => $fc_definition) {
-            if ($fc_definition->getThirdPartySetting('controlled_fields', 'required', 0) === 1) {
-              foreach (Element::children($form[$field_name]['widget']) as $widget_key) {
-                if ($widget_key !== 'add_more') {
-                  $form[$field_name]['widget'][$widget_key][$fc_name]['#attributes']['class'][] = 'controlled-required';
-                }
-              }
-
-              $has_required = TRUE;
-            }
-          }
-        }
-
-        $form[$field_name]['#attributes']['class'][] = 'controlled-field';
-      }
-
-      $form['#attached']['library'][] = 'controlled_fields/controlled_fields_form';
-
-      if ($has_required) {
-        $form['actions']['submit']['#validate'][] = 'controlled_fields_form_validate';
-      }
-    }
+    controlled_fields_entity_form_alter($form, $form_state);
+    return;
   }
 }
 
