@@ -180,7 +180,9 @@ function controlled_fields_form_field_config_edit_form_submit(&$form, FormStateI
   // Field config is controlled if we are inside this function.
   $entity = $form_state->getFormObject()->getEntity();
   $form_state_values = $form_state->getValues();
-  $entity->setThirdPartySetting('controlled_fields', 'required', $form_state_values['required'])->save();
+  if (isset($form_state_values['required'])) {
+    $entity->setThirdPartySetting('controlled_fields', 'required', $form_state_values['required'])->save();
+  }
 }
 
 /**
