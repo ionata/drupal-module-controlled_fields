@@ -2,7 +2,6 @@
 
   Drupal.behaviors.controlled_fields = {
     attach: function(context, settings) {
-      console.log('attach');
       var hideField = function($el) {
         $el.addClass('controlled-fields-hide');
         $el.slideUp('fast');
@@ -31,6 +30,7 @@
             dependentsName = 'controlled-dependent-field-' + dependentsName[1];
           }
 
+          // Early exit if we need to hide.
           if (doHide) {
             hideField($el);
 
@@ -38,54 +38,58 @@
             $('.' + dependentsName).each(function() {
               updateInnerField($(this), true);
             });
+
+            return false;
+          }
+
+          // Traverse inner fields.
+          if ($el.find('select').length > 0) {
+            itemValues.push($el.find('select').val());
+          }
+          else if ($el.find('input.form-checkbox').length > 0) {
+            $el.find('input.form-checkbox').filter(':checked').each(function() {
+              itemValues.push($(this).val());
+            });
           }
           else {
-            if ($el.find('select').length > 0) {
-              itemValues.push($el.find('select').val());
-            }
-            else if ($el.find('input.form-checkbox').length > 0) {
-              $el.find('input.form-checkbox').filter(':checked').each(function() {
-                itemValues.push($(this).val());
+            itemValues.push($el.find('input').filter(':checked').val());
+          }
+
+          for (i = 0; i < itemValues.length; i++) {
+            if (itemValues[i] && dependentsName != null && $('.' + dependentsName + '.controlled-dependent-value-' + itemValues[i]).length > 0) {
+              // Hide all dependents.
+              // @todo this doesn't work with checkboxes nicely.
+              $('.' + dependentsName).each(function() {
+                updateInnerField($(this), true);
               });
+
+              // Show the specific dependents.
+              $('.' + dependentsName + '.controlled-dependent-value-' + itemValues[i]).each(function() {
+                showField($(this));
+                updateInnerField($(this));
+              });
+
+              matches = true;
             }
-            else {
-              itemValues.push($el.find('input').filter(':checked').val());
-            }
+          }
 
-            for (i = 0; i < itemValues.length; i++) {
-              if (itemValues[i] && dependentsName != null && $('.' + dependentsName + '.controlled-dependent-value-' + itemValues[i]).length > 0) {
-                // Hide all dependents.
-                // @todo this doesn't work with checkboxes nicely.
-                $('.' + dependentsName).each(function() {
-                  updateInnerField($(this), true);
-                });
-
-                // Show the specific dependents.
-                $('.' + dependentsName + '.controlled-dependent-value-' + itemValues[i]).each(function() {
-                  showField($(this));
-                  updateInnerField($(this));
-                });
-
-                matches = true;
-              }
-            }
-
-            if (!matches) {
-              // Hide any children.
-              if (dependentsName != null) {
-                $('.' + dependentsName).each(function() {
-                  updateInnerField($(this), true);
-                });
-              }
+          if (!matches) {
+            // Hide any children.
+            if (dependentsName != null) {
+              $('.' + dependentsName).each(function() {
+                updateInnerField($(this), true);
+              });
             }
           }
 
           return false;
+
         })($el, doHide);
 
         return false;
       }
 
+      // Dynamically add in class for required fields that are controlled.
       $('.controlled-required:not(.field--widget-field-collection-embed)').each(function() {
         if ($(this).find('span.fieldset-legend').length > 0) {
           $(this).find('span.fieldset-legend').addClass('form-required');
@@ -103,10 +107,12 @@
         hideEmptyFieldGroups();
       });
 
-      $('.controlled-master').each(function() {
+      $('.controlled-master:not(.controlled-processed)').each(function() {
         if (!$(this).hasClass('controlled-dependent')) {
           updateField($(this));
         }
+
+        $(this).addClass('controlled-processed')
       });
 
       hideEmptyFieldGroups();
