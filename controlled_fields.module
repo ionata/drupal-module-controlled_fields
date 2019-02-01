@@ -12,6 +12,7 @@ use Drupal\Core\Form\FormState;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Component\Utility\UrlHelper;
 
 const CONTROLLED_FIELDS_DELIM = '___';
 
@@ -429,6 +430,9 @@ function controlled_fields_form_value_valid($widget, $form_state_value_field, $f
     }
     elseif ($field_definition->getType() == 'boolean') {
       $valid = !empty($form_state_value_field['value']);
+    }
+    elseif ($field_definition->getType() == 'link') {
+      $valid = ($form_state_value_field[0]['uri'] !== '' && UrlHelper::isValid($form_state_value_field[0]['uri'], TRUE));
     }
     elseif (is_array($form_state_value_field) &&
       array_key_exists(0, $form_state_value_field) &&
