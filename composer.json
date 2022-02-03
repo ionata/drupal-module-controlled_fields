@@ -10,5 +10,13 @@
     "issues": "https://www.drupal.org/project/issues/controlled_fields",
     "source": "http://cgit.drupalcode.org/controlled_fields"
   },
-  "require": {}
+  "require": {
+    "drupal/filter_form_values": "2.0.x-dev"
+  },
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://packages.drupal.org/8"
+    }
+  ]
 }
