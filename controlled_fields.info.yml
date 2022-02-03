@@ -1,7 +1,8 @@
 name: Controlled Fields
 type: module
 description: Enable field widgets to be visible or not on dependent on a controlling field.
-core: 8.x
+# core: 8.x
 package: Fields
 dependencies:
   - filter_form_values
+core_version_requirement: ^8.8 || ^9

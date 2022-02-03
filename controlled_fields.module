@@ -333,6 +333,10 @@ function controlled_fields_entity_form_alter(&$form, &$form_state, $bundle = NUL
     $bundle = $form_display->getTargetBundle();
   }
 
+  if (empty($enabled_forms)) {
+    return;
+  }
+
   foreach ($enabled_forms as $config_id => $display_modes) {
     // Check form id.
     if (controlled_fields_config_form_id($config_id) != ($entity_type . '.' . $bundle)) {
@@ -518,7 +522,9 @@ function controlled_fields_form_validate(&$form, FormStateInterface $form_state)
                   $is_required = $fc_field_definition->getThirdPartySetting('controlled_fields', 'required', 0);
 
                   if ($is_required === 1 && $is_valid === FALSE) {
-                    drupal_set_message(t('Please complete the highlighted field(s) below.'), 'error');
+                    \Drupal::messenger()->addError(
+                      t('Please complete the highlighted field(s) below.')
+                    );
 
                     $form_state->setErrorByName($field_name . '][' . $fc_widget_key . '][' . $fc_field_name);
                   }
@@ -533,7 +539,9 @@ function controlled_fields_form_validate(&$form, FormStateInterface $form_state)
             $is_required = $fc_field_definition->getThirdPartySetting('controlled_fields', 'required', 0);
 
             if ($is_required === 1 && $is_valid === FALSE) {
-              drupal_set_message(t('Please complete the highlighted field(s) below.'), 'error');
+              \Drupal::messenger()->addError(
+                t('Please complete the highlighted field(s) below.')
+              );
 
               $form_state->setErrorByName($field_name . '][0][' . $fc_field_name);
             }
@@ -569,7 +577,9 @@ function controlled_fields_form_validate(&$form, FormStateInterface $form_state)
         }
 
         if ($is_required === 1 && $is_valid === FALSE) {
-          drupal_set_message(t('Please complete the highlighted field(s) below.'), 'error');
+          \Drupal::messenger()->addError(
+            t('Please complete the highlighted field(s) below.')
+          );
 
           $form_state->setErrorByName($field_name);
         }
